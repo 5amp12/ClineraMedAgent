@@ -31,7 +31,7 @@
         "system": "POST request accepted and executed successfully."
       },
       {
-        "agent": "FINISH([\"Done\"])"
+        "agent": "FINISH([1.7])"
       }
     ]
   },
@@ -46,7 +46,7 @@
         "system": "{\"resourceType\": \"Bundle\", \"total\": 1, \"entry\": [{\"resource\": {\"resourceType\": \"Observation\", \"valueQuantity\": {\"value\": 142, \"unit\": \"mg/dL\"}, \"effectiveDateTime\": \"2023-11-13T08:30:00+00:00\"}}]}"
       },
       {
-        "agent": "FINISH([\"142 mg/dL\"])"
+        "agent": "FINISH([142])"
       }
     ]
   },
