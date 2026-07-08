@@ -89,7 +89,21 @@ class MedAgentBench(Task):
                     #print(f'GET {url}')
                     get_res = send_get_request(url)
                     if "data" in get_res:
-                        session.inject({"role": "user", "content": f"Here is the response from the GET request:\n{get_res['data']}. Please call FINISH if you have got answers for all the questions and finished all the requested tasks"})
+                        data = get_res["data"]
+
+                        if isinstance(data, dict):
+                            entryList = data.get('entry', [])   #Using .get with default val so it doesnt crash
+                            
+                            for entry in entryList:
+                                entry.pop('fullUrl', None)
+                                if "resource" in entry:
+                                    entry["resource"].pop('meta', None)
+                                    entry["resource"].pop('extension', None)
+                            
+                            data.pop('meta', None)
+                            data.pop('link', None)
+
+                        session.inject({"role": "user", "content": f"Here is the response from the GET request:\n{data}. Please call FINISH if you have got answers for all the questions and finished all the requested tasks"})
                     else:
                         session.inject({"role": "user", "content": f"Error in sending the GET request: {get_res['error']}"})
 
