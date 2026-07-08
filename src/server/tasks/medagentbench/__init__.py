@@ -26,6 +26,7 @@ Here is a list of functions in JSON format that you can invoke. Note that you sh
 {functions}
 
 Context: {context}
+Examples: {example}
 Question: {question}"""
 
 class MedAgentBench(Task):
@@ -38,6 +39,10 @@ class MedAgentBench(Task):
         self.func_file = configs.pop("func_file")
         with open(self.func_file, 'r') as f:
             self.funcs = json.load(f)
+
+        self.example_file = configs.pop("example", None)
+        with open(self.example_file, 'r') as f:
+            self.examples = json.load(f)
         
         self.max_round = configs.pop("max_round", 5)
 
@@ -57,10 +62,16 @@ class MedAgentBench(Task):
     async def start_sample(self, index, session: Session):
         print(f"task start {index}")
         case = self.data[index]
+    
+        task_type = case["id"].split("_")[0]
+        example = self.examples.get(task_type, "")
+        example_str = json.dumps(example, indent=2) if example else ""
+
         session.inject({"role": "user", "content": MedAgentBench_prompt.format(api_base=self.fhir_api_base,
                                                                                functions=json.dumps(self.funcs),
                                                                                context=case['context'],
-                                                                               question=case['instruction'])})
+                                                                               question=case['instruction'],
+                                                                               example=example_str)})
         try:
             for round in range(self.max_round):
                 #time.sleep(5.0) Add for rate limit

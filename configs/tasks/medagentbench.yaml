@@ -10,3 +10,4 @@ medagentbench-std:
     name: medagentbench-std
     data_file: "data/medagentbench/test_data_v2.json"
     func_file: "data/medagentbench/funcs_v1.json"
+    example: "data/medagentbench/example.json"

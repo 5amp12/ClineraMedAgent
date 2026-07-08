@@ -1,0 +1,101 @@
+{
+  "task1": {
+    "context": "",
+    "question": "What is the MRN of the patient named Jane Smith, born on 1988-03-22?",
+    "steps": [
+      {
+        "agent": "GET {api_base}/Patient?given=Jane&family=Smith&birthdate=1988-03-22"
+      },
+      {
+        "system": "{\"resourceType\": \"Bundle\", \"total\": 1, \"entry\": [{\"resource\": {\"resourceType\": \"Patient\", \"id\": \"S1234567\", \"identifier\": [{\"use\": \"usual\", \"type\": {\"coding\": [{\"system\": \"http://terminology.hl7.org/CodeSystem/v2-0203\", \"code\": \"MR\", \"display\": \"Medical Record Number\"}]}, \"value\": \"S1234567\"}]}}]}"
+      },
+      {
+        "agent": "FINISH([\"S1234567\"])"
+      }
+    ]
+  },
+  "task5": {
+    "context": "It's 2023-11-13T10:15:00+00:00 now. The code for magnesium is \"MG\". The NDC for replacement IV magnesium is 0338-1715-40. Dosing instructions: (1) Mild deficiency (eg, serum magnesium 1.5 to 1.9 mg/dL): IV: 1 g over 1 hour. (2) Moderate deficiency (eg, serum magnesium 1 to <1.5 mg/dL): IV: 2 g over 2 hours. (3) Severe deficiency (eg, serum magnesium <1 mg/dL): IV: 4 g over 4 hours.",
+    "question": "Check patient SEXAMPLE1's last serum magnesium level within last 24 hours. If low, then order replacement IV magnesium according to dosing instructions. If no magnesium level has been recorded in the last 24 hours, don't order anything.",
+    "steps": [
+      {
+        "agent": "GET {api_base}/Observation?subject=SEXAMPLE1&code=MG&_sort=-date&_count=1&date=gt2023-11-12T10:15:00%2B00:00"
+      },
+      {
+        "system": "{\"resourceType\": \"Bundle\", \"total\": 1, \"entry\": [{\"resource\": {\"resourceType\": \"Observation\", \"valueQuantity\": {\"value\": 1.7, \"unit\": \"mg/dL\"}, \"effectiveDateTime\": \"2023-11-13T06:00:00+00:00\"}}]}"
+      },
+      {
+        "agent": "POST {api_base}/MedicationRequest\n{\"resourceType\": \"MedicationRequest\", \"status\": \"active\", \"intent\": \"order\", \"medicationCodeableConcept\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/sid/ndc\", \"code\": \"0338-1715-40\"}]}, \"subject\": {\"reference\": \"Patient/SEXAMPLE1\"}, \"dosageInstruction\": [{\"doseAndRate\": [{\"doseQuantity\": {\"value\": 1, \"unit\": \"g\"}}], \"timing\": {\"repeat\": {\"duration\": 1, \"durationUnit\": \"h\"}}}]}"
+      },
+      {
+        "system": "POST request accepted and executed successfully."
+      },
+      {
+        "agent": "FINISH([\"Done\"])"
+      }
+    ]
+  },
+  "task7": {
+    "context": "It's 2023-11-13T10:15:00+00:00 now. The code for CBG is \"GLU\"",
+    "question": "What is the most recent CBG of the patient SEXAMPLE2?",
+    "steps": [
+      {
+        "agent": "GET {api_base}/Observation?subject=SEXAMPLE2&code=GLU&_sort=-date&_count=1"
+      },
+      {
+        "system": "{\"resourceType\": \"Bundle\", \"total\": 1, \"entry\": [{\"resource\": {\"resourceType\": \"Observation\", \"valueQuantity\": {\"value\": 142, \"unit\": \"mg/dL\"}, \"effectiveDateTime\": \"2023-11-13T08:30:00+00:00\"}}]}"
+      },
+      {
+        "agent": "FINISH([\"142 mg/dL\"])"
+      }
+    ]
+  },
+  "task9": {
+    "context": "It's 2023-11-13T10:15:00+00:00 now. The code for potassium is \"K\". The NDC for replacement potassium is 40032-917-01. Dosing instructions: for every 0.1 mEq/L (or mmol/L) below threshold, order 10 mEq potassium oral repletion to reach a goal of 3.5 serum level. The LOINC code for serum potassium level is 2823-3.",
+    "question": "Check patient SEXAMPLE3's most recent potassium level. If low, then order replacement potassium according to dosing instructions. Also pair this order with a morning serum potassium level to be completed the next day at 8am.",
+    "steps": [
+      {
+        "agent": "GET {api_base}/Observation?subject=SEXAMPLE3&code=K&_sort=-date&_count=1"
+      },
+      {
+        "system": "{\"resourceType\": \"Bundle\", \"total\": 1, \"entry\": [{\"resource\": {\"resourceType\": \"Observation\", \"valueQuantity\": {\"value\": 3.2, \"unit\": \"mEq/L\"}, \"effectiveDateTime\": \"2023-11-13T07:00:00+00:00\"}}]}"
+      },
+      {
+        "agent": "POST {api_base}/MedicationRequest\n{\"resourceType\": \"MedicationRequest\", \"status\": \"active\", \"intent\": \"order\", \"authoredOn\": \"2023-11-13T10:15:00+00:00\", \"medicationCodeableConcept\": {\"coding\": [{\"system\": \"http://hl7.org/fhir/sid/ndc\", \"code\": \"40032-917-01\"}]}, \"subject\": {\"reference\": \"Patient/SEXAMPLE3\"}, \"dosageInstruction\": [{\"route\": \"oral\", \"doseAndRate\": [{\"doseQuantity\": {\"value\": 30, \"unit\": \"mEq\"}}]}]}"
+      },
+      {
+        "system": "POST request accepted and executed successfully."
+      },
+      {
+        "agent": "POST {api_base}/ServiceRequest\n{\"resourceType\": \"ServiceRequest\", \"status\": \"active\", \"intent\": \"order\", \"priority\": \"stat\", \"authoredOn\": \"2023-11-13T10:15:00+00:00\", \"code\": {\"coding\": [{\"system\": \"http://loinc.org\", \"code\": \"2823-3\", \"display\": \"Potassium [Moles/volume] in Serum or Plasma\"}]}, \"subject\": {\"reference\": \"Patient/SEXAMPLE3\"}, \"occurrenceDateTime\": \"2023-11-14T08:00:00+00:00\"}"
+      },
+      {
+        "system": "POST request accepted and executed successfully."
+      },
+      {
+        "agent": "FINISH([3.2])"
+      }
+    ]
+  },
+  "task10": {
+    "context": "It's 2023-11-13T10:15:00+00:00 now. The code for HbA1C is \"A1C\". The LOINC code for ordering HbA1C lab is: 4548-4. The answer should be [-1] if a measurement is not available.",
+    "question": "What's the last HbA1C (hemoglobin A1C) value in the chart for patient SEXAMPLE4 and when was it recorded? If the lab value result date is greater than 1 year old, order a new HbA1C lab test.",
+    "steps": [
+      {
+        "agent": "GET {api_base}/Observation?subject=SEXAMPLE4&code=A1C&_sort=-date&_count=1"
+      },
+      {
+        "system": "{\"resourceType\": \"Bundle\", \"total\": 1, \"entry\": [{\"resource\": {\"resourceType\": \"Observation\", \"valueQuantity\": {\"value\": 7.2, \"unit\": \"%\"}, \"effectiveDateTime\": \"2021-08-05T09:00:00+00:00\"}}]}"
+      },
+      {
+        "agent": "POST {api_base}/ServiceRequest\n{\"resourceType\": \"ServiceRequest\", \"authoredOn\": \"2023-11-13T10:15:00+00:00\", \"priority\": \"stat\", \"status\": \"active\", \"intent\": \"order\", \"code\": {\"coding\": [{\"system\": \"http://loinc.org\", \"code\": \"4548-4\", \"display\": \"Hemoglobin A1c/Hemoglobin.total in Blood\"}]}, \"subject\": {\"reference\": \"Patient/SEXAMPLE4\"}}"
+      },
+      {
+        "system": "POST request accepted and executed successfully."
+      },
+      {
+        "agent": "FINISH([7.2, \"2021-08-05T09:00:00+00:00\"])"
+      }
+    ]
+  }
+}
