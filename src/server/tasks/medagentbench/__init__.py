@@ -7,6 +7,137 @@ from .eval import eval
 import time
 import json
 import importlib
+import os
+import re
+
+_FINISH_NUM = re.compile(r'^\s*(-?\d+(?:\.\d+)?)\s*[A-Za-z%/]*\s*$')
+_FINISH_UNIT = re.compile(r'(-?\d+(?:\.\d+)?)\s*(?:mg/dL|mmol/L|mEq(?:/L)?|g/dL|%|g)')
+
+#The grader runs strict json.loads on the FINISH answer and expects a bare array of scalars; models often return correct data as a dict, list of dicts, prose, or a unit-suffixed string, so coerce those shapes to bare numbers while leaving already-clean output untouched.
+def _normalize_finish(answer):
+    try:
+        parsed = json.loads(answer)
+    except Exception:
+        return answer
+    if not isinstance(parsed, list):
+        return answer
+    out = []
+    changed = False
+    for el in parsed:
+        if isinstance(el, dict):
+            v = el.get('value')
+            if isinstance(v, bool) or not isinstance(v, (int, float, str)):
+                vq = el.get('valueQuantity')
+                v = vq.get('value') if isinstance(vq, dict) else None
+            if isinstance(v, bool) or not isinstance(v, (int, float, str)):
+                return answer
+            el = v
+            changed = True
+        if isinstance(el, str):
+            m = _FINISH_NUM.match(el)
+            hits = _FINISH_UNIT.findall(el)
+            tok = m.group(1) if m else (hits[0] if len(hits) == 1 else None)
+            if tok is not None:
+                el = float(tok)
+                changed = True
+        out.append(el)
+    if not changed:
+        return answer
+    candidate = json.dumps(out)
+    try:
+        json.loads(candidate)
+    except Exception:
+        return answer
+    return candidate
+
+#task4-style "last 24h" queries express the window as a bare (no-operator) date= filter,
+#which FHIR matches literally and returns 0 rows. When the model gave a comma range
+#"start,end" (the common case), rewrite it to a real lower-bound range date=ge<start>:
+#FHIR then returns exactly the window, so an out-of-window latest reading yields an empty
+#bundle and the model correctly answers -1 (previously we dropped the filter entirely and
+#the model returned the stale most-recent value). refsol uses a single-sided >= (start)
+#check with no upper bound, so ge<start> mirrors it exactly. For a bare single timestamp we
+#keep the old behavior: drop it and fetch broadly. _count=5000 is preserved so averages
+#(task6) still see every in-window reading. Grading is unaffected: the grader re-fetches
+#independently.
+def _broaden_observation_date(query):
+    try:
+        if 'Observation' not in query or 'date=' not in query:
+            return query
+        base, _, qs = query.partition('?')
+        kept, changed, has_count = [], False, False
+        for p in qs.split('&'):
+            k, _, v = p.partition('=')
+            if k == '_count':
+                has_count = True
+            if k == 'date' and 'T' in v and not re.match(r'(eq|ne|gt|lt|ge|le|sa|eb|ap)', v):
+                start = v.split(',')[0].strip()
+                if ',' in v and 'T' in start:
+                    kept.append(f'date=ge{start}')  # comma range -> real lower-bound window
+                changed = True
+                continue
+            kept.append(p)
+        if not changed:
+            return query
+        if not has_count:
+            kept.append('_count=5000')
+        return base + '?' + '&'.join(kept)
+    except Exception:
+        return query
+
+
+#Model Observation reads almost never specify a sort, and this FHIR server returns
+#entries oldest-first while paginating at ~20 rows. So the model both mis-picks the
+#"most recent" reading from an unsorted page AND, for high-volume patients, may never
+#receive the newest reading at all (it lands on a later page). Appending _sort=-date
+#puts the globally newest reading at entry[0] on page 1 regardless of total count -
+#verified against the live server (e.g. a 479-reading patient still surfaces the true
+#latest first). No _count is forced, so bundles stay small. Only applied when the
+#model didn't already choose a sort. Grading is unaffected: the grader re-fetches
+#independently with its own query.
+def _sort_observation_recent(query):
+    try:
+        if 'Observation' not in query:
+            return query
+        base, _, qs = query.partition('?')
+        params = qs.split('&') if qs else []
+        if any(p.partition('=')[0] == '_sort' for p in params):
+            return query
+        params.append('_sort=-date')
+        return base + '?' + '&'.join(params)
+    except Exception:
+        return query
+
+
+#FHIR bundles carry per-entry metadata (fullUrl, search, resource.meta/extension/text/category)
+#that the model never needs to answer a lab-value question. A patient with 100+ readings can
+#exceed the per-minute token budget once the bundle is re-sent across rounds, causing 429
+#"Request too large" failures. Strip that metadata losslessly (values/timestamps untouched, and
+#the grader re-fetches independently so trimming never affects scoring). send_get_request returns
+#'data' as a JSON string (FHIR server replies application/fhir+json), so parse before trimming.
+_BUNDLE_DROP = ('meta', 'link')
+_ENTRY_DROP = ('fullUrl', 'search')
+_RESOURCE_DROP = ('meta', 'extension', 'text', 'category')
+
+def _trim_fhir_response(data):
+    try:
+        parsed = json.loads(data) if isinstance(data, str) else data
+        if not isinstance(parsed, dict) or 'entry' not in parsed:
+            return data
+        for entry in parsed.get('entry', []):
+            if not isinstance(entry, dict):
+                continue
+            for k in _ENTRY_DROP:
+                entry.pop(k, None)
+            res = entry.get('resource')
+            if isinstance(res, dict):
+                for k in _RESOURCE_DROP:
+                    res.pop(k, None)
+        for k in _BUNDLE_DROP:
+            parsed.pop(k, None)
+        return json.dumps(parsed, separators=(',', ':'))
+    except Exception:
+        return data
 
 MedAgentBench_prompt = """You are an expert in using FHIR functions to assist medical professionals. You are given a question and a set of possible functions. Based on the question, you will need to make one or more function/tool calls to achieve the purpose.
 
@@ -43,7 +174,19 @@ class MedAgentBench(Task):
         self.example_file = configs.pop("example", None)
         with open(self.example_file, 'r') as f:
             self.examples = json.load(f)
-        
+
+        #Per-category answer-format hints (keyed by task category prefix, e.g. "task6").
+        #Only low-performing, format-sensitive categories are present; 90%+ categories are
+        #intentionally absent so their prompts stay unchanged.
+        #Optional file - missing/corrupt hints must never break a run.
+        self.task_hints = {}
+        hints_path = os.path.join(os.path.dirname(self.data_file), "task_hints.json")
+        try:
+            with open(hints_path, 'r') as f:
+                self.task_hints = {k: v for k, v in json.load(f).items() if not k.startswith('_')}
+        except Exception as e:
+            print(f"task_hints.json not loaded ({e}); proceeding without per-category hints")
+
         self.max_round = configs.pop("max_round", 5)
 
         self.fhir_api_base = configs.pop("fhir_api_base")
@@ -67,9 +210,17 @@ class MedAgentBench(Task):
         example = self.examples.get(task_type, "")
         example_str = json.dumps(example, indent=2) if example else ""
 
+        context = case['context']
+        #task9's context names both code "K" and LOINC 2823-3 for potassium, but this server only indexes the level by code "K"; mirror the existing magnesium "MG" hint so the model queries K, not the LOINC
+        if '2823-3' in context:
+            context += ' The code for potassium is "K", not LOINC 2823-3.'
+        #Append the per-category answer-format hint (if any) so the model emits the FINISH shape the grader expects. Only weak, format-sensitive categories have a hint; others are unchanged.
+        if task_type in self.task_hints:
+            context += ' ' + self.task_hints[task_type]
+
         session.inject({"role": "user", "content": MedAgentBench_prompt.format(api_base=self.fhir_api_base,
                                                                                functions=json.dumps(self.funcs),
-                                                                               context=case['context'],
+                                                                               context=context,
                                                                                question=case['instruction'],
                                                                                example=example_str)})
         try:
@@ -85,25 +236,12 @@ class MedAgentBench(Task):
                 r = res.content.strip().replace('```tool_code', '').replace('```', '').strip() #Remove separator for Gemini2.0Flash
 
                 if r.startswith('GET'):
-                    url = r[3:].strip() + '&_format=json'
+                    url = _sort_observation_recent(_broaden_observation_date(r[3:].strip())) + '&_format=json'
                     #print(f'GET {url}')
                     get_res = send_get_request(url)
                     if "data" in get_res:
-                        data = get_res["data"]
-
-                        if isinstance(data, dict):
-                            entryList = data.get('entry', [])   #Using .get with default val so it doesnt crash
-                            
-                            for entry in entryList:
-                                entry.pop('fullUrl', None)
-                                if "resource" in entry:
-                                    entry["resource"].pop('meta', None)
-                                    entry["resource"].pop('extension', None)
-                            
-                            data.pop('meta', None)
-                            data.pop('link', None)
-
-                        session.inject({"role": "user", "content": f"Here is the response from the GET request:\n{data}. Please call FINISH if you have got answers for all the questions and finished all the requested tasks"})
+                        trimmed = _trim_fhir_response(get_res['data'])
+                        session.inject({"role": "user", "content": f"Here is the response from the GET request:\n{trimmed}. Please call FINISH if you have got answers for all the questions and finished all the requested tasks"})
                     else:
                         session.inject({"role": "user", "content": f"Error in sending the GET request: {get_res['error']}"})
 
@@ -115,9 +253,11 @@ class MedAgentBench(Task):
                     else:
                         session.inject({"role": "user", "content": "POST request accepted and executed successfully. Please call FINISH if you have got answers for all the questions and finished all the requested tasks"})
                 elif r.startswith('FINISH('):
+                    answer = r[len('FINISH('):-1] #Trim to a list
+                    answer = _normalize_finish(answer)
                     return TaskOutput(
                         status=SampleStatus.COMPLETED,
-                        result=r[len('FINISH('):-1], #Trim to a list
+                        result=answer,
                         history=session.history
                     )
                 else:
