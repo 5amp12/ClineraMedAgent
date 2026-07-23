@@ -1,0 +1,56 @@
+:root {
+  --color-bg: #f5f6fa;
+  --color-surface: #ffffff;
+  --color-border: #e4e6ee;
+  --color-text: #1c1f2e;
+  --color-text-muted: #6b7080;
+  --color-text-faint: #9297a6;
+  --color-primary: #3ecfb2;
+  --color-primary-dark: #3ecfb2;
+  --color-sidebar-bg: #171233;
+  --color-sidebar-bg-active: #3ecfb2d0;
+  --color-sidebar-text: #cbc9de;
+  --color-sidebar-text-muted: #8f8ba8;
+
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+button {
+  font-family: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d3d5e0;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
