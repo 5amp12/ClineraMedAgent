@@ -12,6 +12,7 @@ class PipelineState(TypedDict, total=False):
 
     transcript: list[Any]           # seeded input to summarize
     patients: list[Any]             # board patient diagnostics (seeded upstream by fetch_board)
+    visit_id: str                   # persistence key used by store_and_gate
     note: dict[str, Any]            # produced by summarize (Call A)
 
     fetched: list[dict[str, Any]]   # accumulated FHIR read results
@@ -20,4 +21,5 @@ class PipelineState(TypedDict, total=False):
     decision: str                   # last action: "fetch" | "proceed" (read by the router)
 
     recommendations: list[Any]      # produced by draft_recommendations
+    gate_status: str                # set by store_and_gate (e.g. "pending_approval")
     audit_log: list[str]
