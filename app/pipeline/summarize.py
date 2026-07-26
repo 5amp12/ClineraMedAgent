@@ -3,14 +3,10 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
-import anthropic
-
-# Stub until credentials are provisioned. Swap for an env lookup before going live.
-client = anthropic.Anthropic(api_key="API_KEY_HERE")
-
-MODEL = "claude-sonnet-5"
+from app.pipeline.llm import client, MODEL
 
 _SYSTEM = (
     "You are a clinical scribe. Extract a structured visit note from the "
@@ -18,7 +14,7 @@ _SYSTEM = (
     "findings, diagnoses, or plans."
 )
 
-# The note shape the model must return. Enforced via a forced tool call so the
+# The note shape the model must return. Enforced via OpenAI structured output (strict), so the
 # response is always valid JSON with exactly these fields.
 NOTE_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -67,22 +63,18 @@ def _transcript_to_text(transcript: list[Any]) -> str:
 
 def summarize(state: dict[str, Any]) -> dict[str, Any]:
     transcript_text = _transcript_to_text(state["transcript"])
-    response = client.messages.create(
+    response = client.chat.completions.create(
         model=MODEL,
-        max_tokens=2048,
-        temperature=0,
-        system=_SYSTEM,
-        tools=[
-            {
-                "name": "emit_note",
-                "description": "Return the structured clinical note.",
-                "input_schema": NOTE_SCHEMA,
-            }
+        messages=[
+            {"role": "system", "content": _SYSTEM},
+            {"role": "user", "content": transcript_text},
         ],
-        tool_choice={"type": "tool", "name": "emit_note"},
-        messages=[{"role": "user", "content": transcript_text}],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "clinical_note", "schema": NOTE_SCHEMA, "strict": True},
+        },
     )
-    note = next(block.input for block in response.content if block.type == "tool_use")
+    note = json.loads(response.choices[0].message.content)
     return {
         "note": note,
         "audit_log": state.get("audit_log", []) + ["summarize: note produced"],
