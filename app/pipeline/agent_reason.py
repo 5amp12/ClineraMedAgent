@@ -7,10 +7,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.pipeline.llm import client, MODEL
 from app.pipeline.state import PipelineState
-
-# Placeholder — wire up the real model call in _decide() below.
-MODEL = "MODEL_NAME"
 
 # How many FHIR fetches we allow before forcing the pipeline to move on. Guards the
 # clinera_get -> agent_reason loop against spinning forever.
@@ -74,10 +72,18 @@ def _context(state: PipelineState) -> str:
 
 
 def _decide(state: PipelineState) -> dict[str, Any]:
-    # PLACEHOLDER for the model call — to be written manually.
-    # Given _SYSTEM + _context(state) + DECISION_SCHEMA, call MODEL and return a decision dict:
-    #   {"action": "fetch"|"proceed", "resource"?: str, "params"?: dict, "rationale": str}
-    raise NotImplementedError("Wire up the MODEL_NAME call in agent_reason._decide()")
+    # Structured OpenAI call. Function calling is used (not strict json_schema) because the
+    # decision has optional fields (resource/params) with free-form params.
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": _SYSTEM},
+            {"role": "user", "content": _context(state)},
+        ],
+        tools=[{"type": "function", "function": {"name": "decision", "parameters": DECISION_SCHEMA}}],
+        tool_choice={"type": "function", "function": {"name": "decision"}},
+    )
+    return json.loads(response.choices[0].message.tool_calls[0].function.arguments)
 
 
 def agent_reason(state: PipelineState) -> dict[str, Any]:
