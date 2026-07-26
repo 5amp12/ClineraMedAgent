@@ -7,10 +7,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.pipeline.llm import client, MODEL
 from app.pipeline.state import PipelineState
-
-# Placeholder — wire up the real model call in _draft() below.
-MODEL = "MODEL_NAME"
 
 # Order categories. order_type maps to the FHIR resource written on approval:
 #   medication -> MedicationRequest ; lab / follow_up -> ServiceRequest ; other -> (clinician review)
@@ -84,10 +82,20 @@ def _context(state: PipelineState) -> str:
 
 
 def _draft(state: PipelineState) -> list[dict[str, Any]]:
-    # PLACEHOLDER for the model call — to be written manually.
-    # Given _SYSTEM + _context(state) + RECOMMENDATION_SCHEMA, call MODEL and return the list of
-    # proposed orders: [{"order_type", "details", "rationale", "source", "confidence"}, ...]
-    raise NotImplementedError("Wire up the MODEL_NAME call in draft_recommendations._draft()")
+    # Structured OpenAI call. Function calling is used (not strict json_schema) because each order
+    # has an optional field (source).
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": _SYSTEM},
+            {"role": "user", "content": _context(state)},
+        ],
+        tools=[{"type": "function",
+                "function": {"name": "recommendations", "parameters": RECOMMENDATION_SCHEMA}}],
+        tool_choice={"type": "function", "function": {"name": "recommendations"}},
+    )
+    data = json.loads(response.choices[0].message.tool_calls[0].function.arguments)
+    return data["recommendations"]
 
 
 def draft_recommendations(state: PipelineState) -> dict[str, Any]:
