@@ -12,6 +12,8 @@ class PipelineState(TypedDict, total=False):
 
     transcript: list[Any]           # seeded input to summarize
     patients: list[Any]             # board patient diagnostics (seeded upstream by fetch_board)
+    board: dict[str, Any]           # board metadata (seeded upstream by fetch_board)
+    consent_to_process: bool        # governance: may we process this board?
     visit_id: str                   # persistence key used by store_and_gate
     note: dict[str, Any]            # produced by summarize (Call A)
 
@@ -21,5 +23,7 @@ class PipelineState(TypedDict, total=False):
     decision: str                   # last action: "fetch" | "proceed" (read by the router)
 
     recommendations: list[Any]      # produced by draft_recommendations
-    gate_status: str                # set by store_and_gate (e.g. "pending_approval")
+    gate_status: str                # set by store_and_gate ("pending_approval") or halt ("halted")
+    governance_ok: bool             # set by governance_check; routes summarize vs halt
+    halt_reason: str                # why the run was halted (governance failure)
     audit_log: list[str]
