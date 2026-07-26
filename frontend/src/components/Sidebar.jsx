@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, Link } from 'react-router-dom'
 import {
   Sparkles,
   UserPlus,
@@ -68,14 +68,14 @@ function Sidebar() {
           </div>
         </div>
 
-        <button type="button" className="sidebar-profile">
+        <Link to="/signin" className="sidebar-profile">
           <span className="sidebar-avatar">SP</span>
           <span className="sidebar-profile-info">
             <span className="sidebar-profile-name">Samuel Passey</span>
             <span className="sidebar-profile-email">sampassey2@gmail.com</span>
           </span>
           <ChevronRight size={16} strokeWidth={1.75} />
-        </button>
+        </Link>
       </div>
     </aside>
   )
