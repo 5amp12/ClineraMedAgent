@@ -64,6 +64,13 @@ def set_order_status(visit_id: str, order_id: str, status: OrderStatus,
     return order
 
 
+def attach_report(visit_id: str, report: dict[str, Any]) -> None:
+    # Store the assembled report on the record, so a visit's note + orders + report live together.
+    record = _STORE.get(visit_id)
+    if record is not None:
+        record["report"] = report
+
+
 def clear() -> None:
     # test helper — reset the in-memory store.
     _STORE.clear()
