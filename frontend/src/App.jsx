@@ -9,9 +9,9 @@ function App() {
       <Routes>
         <Route path="/signin" element={<Signin />} />
         <Route element={<AppLayout />}>
-          <Route index element={<Navigate to="/reports" replace />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="*" element={<Navigate to="/reports" replace />} />
+          {/* <Route index element={<Navigate to="/reports" replace />} /> */}
+          <Route path="/reports/:id" element={<Reports />} />
+          {/* <Route path="*" element={<Navigate to="/reports" replace />} /> */}
         </Route>
       </Routes>
     </BrowserRouter>

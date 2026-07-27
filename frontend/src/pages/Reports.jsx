@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   FolderPlus,
@@ -17,19 +18,40 @@ import {
   ArrowUp,
   Sparkles,
 } from 'lucide-react'
-import { report, chapters } from '../data/mockReport.js'
+// import { report, chapters } from '../data/mockReport.js'
+import { report } from "../../api/ReportCall.js"
+import ClinicalNote from '../components/ClinicalNote.jsx'
 import './Reports.css'
 
 const tabs = ['Report', 'Transcript']
 
 function Reports() {
-  const [activeTab, setActiveTab] = useState('Recap')
+  const [activeTab, setActiveTab] = useState('Report')
   const [search, setSearch] = useState('')
+  const [reportData, setReportData] = useState('')
 
-  const visibleChapters = chapters.filter((chapter) =>
-    chapter.title.toLowerCase().includes(search.toLowerCase()) ||
-    chapter.body.toLowerCase().includes(search.toLowerCase()),
-  )
+  // const visibleChapters = chapters.filter((chapter) =>
+  //   chapter.title.toLowerCase().includes(search.toLowerCase()) ||
+  //   chapter.body.toLowerCase().includes(search.toLowerCase()),
+  // )
+
+  const params = useParams();
+  useEffect(() => {
+
+    async function load(){
+      
+      console.log(params.id)
+
+      const data = await report(params.id);
+      setReportData(data)
+      console.log(data)
+    }
+    load()
+
+  })
+
+  
+  
 
   return (
     <div className="reports-page">
@@ -38,7 +60,7 @@ function Reports() {
           <button type="button" className="icon-btn" aria-label="Back">
             <ArrowLeft size={18} />
           </button>
-          <h1 className="reports-title">{report.title}</h1>
+          <h1 className="reports-title">{reportData.board_title}</h1>
         </div>
         <div className="reports-header-right">
           <button type="button" className="pill-btn">
@@ -55,17 +77,17 @@ function Reports() {
       <div className="reports-meta">
         <span className="reports-meta-item">
           <Calendar size={14} />
-          {report.date}
+          {reportData.date}
         </span>
         <span className="reports-meta-dot">&middot;</span>
         <span className="reports-meta-item">
           <Clock size={14} />
-          {report.time}
+          {reportData.start_time}
         </span>
         <span className="reports-meta-dot">&middot;</span>
         <span className="reports-meta-item">
           <Users size={14} />
-          {report.attendees.join(', ')}, +{report.extraAttendeeCount} more
+          {/* {report.attendees.join(', ')}, +{report.extraAttendeeCount} more  --add attendees */}
         </span>
       </div>
 
@@ -82,53 +104,59 @@ function Reports() {
         ))}
       </nav>
 
-      <div className="reports-body">
-        <section className="reports-recap">
-          {activeTab === 'Transcript' ? (
-            <>
-              <div className="reports-search">
+       <div className="reports-body">
+         <section className="reports-recap">
+           {activeTab === 'Report' ? (
+             reportData && reportData.report ? (
+               <ClinicalNote note={reportData.report} segments={[]} />
+             ) : (
+               <p>Loading...</p>
+             )
+           ) : activeTab === 'Transcript' ? (
+             <>
+               <div className="reports-search">
                 <div className="reports-search-input">
-                  <Search size={15} />
-                  <input
-                    type="text"
+                   <Search size={15} />
+                   <input
+                     type="text"
                     placeholder="Search recap..."
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                  />
-                </div>
-                <button type="button" className="icon-btn" aria-label="Copy recap">
-                  <Copy size={15} />
-                </button>
-              </div>
+                     value={search}
+                     onChange={(event) => setSearch(event.target.value)}
+                   />
+                 </div>
+                 <button type="button" className="icon-btn" aria-label="Copy recap">
+                   <Copy size={15} />
+                 </button>
+               </div>
 
-              <h2 className="reports-section-title">Key Discussion Points</h2>
+               <h2 className="reports-section-title">Key Discussion Points</h2>
 
-              <div className="reports-discussion-list">
-                {visibleChapters.map((chapter) => (
+               <div className="reports-discussion-list">
+                 {visibleChapters.map((chapter) => (
                   <div className="reports-discussion-item" key={chapter.time}>
-                    <div className="reports-discussion-heading">
-                      <span className="reports-discussion-time">{chapter.time}</span>
-                      <span className="reports-discussion-title">{chapter.title}</span>
-                    </div>
-                    <p className="reports-discussion-body">{chapter.body}</p>
-                  </div>
-                ))}
-                {visibleChapters.length === 0 ? (
-                  <p className="reports-discussion-empty">No discussion points match your search.</p>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <div className="reports-tab-placeholder">
-              <p>{activeTab} content isn&apos;t wired up yet in this sample.</p>
-            </div>
-          )}
-        </section>
-      </div>
+                     <div className="reports-discussion-heading">
+                                            <span className="reports-discussion-time">{chapter.time}</span>
+                       <span className="reports-discussion-title">{chapter.title}</span>
+                     </div>
+                     <p className="reports-discussion-body">{chapter.body}</p>
+                   </div>
+                 ))}
+                 {visibleChapters.length === 0 ? (
+                   <p className="reports-discussion-empty">No discussion points match your search.</p>
+                 ) : null}
+               </div>
+             </>
+           ) : (
+             <div className="reports-tab-placeholder">
+               <p>{activeTab} content isn&apos;t wired up yet in this sample.</p>
+             </div>
+           )}
+         </section>
+       </div>
 
-      <button type="button" className="reports-scroll-top" aria-label="Scroll to top">
-        <ArrowUp size={16} />
-      </button>
+       <button type="button" className="reports-scroll-top" aria-label="Scroll to top">
+         <ArrowUp size={16} />
+       </button> 
     </div>
   )
 }
