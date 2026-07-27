@@ -10,13 +10,14 @@
 #                     ^                                   |
 #                     +-----------------------------------+   (loop, capped by MAX_FETCHES)
 #                     |
-#                     +--(proceed)--> draft_recommendations -> store_and_gate -> END
+#                     +--(proceed)--> draft_recommendations -> store_and_gate -> assemble_report -> END
 
 from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
 from app.pipeline.agent_reason import agent_reason, route_after_reason
+from app.pipeline.assemble_report import assemble_report
 from app.pipeline.clinera_get import clinera_get
 from app.pipeline.draft_recommendations import draft_recommendations
 from app.pipeline.governance_check import governance_check, route_after_governance
@@ -36,6 +37,7 @@ def build_graph():
     g.add_node("clinera_get", clinera_get)
     g.add_node("draft_recommendations", draft_recommendations)
     g.add_node("store_and_gate", store_and_gate)
+    g.add_node("assemble_report", assemble_report)
 
     g.add_edge(START, "governance_check")
 
@@ -61,6 +63,7 @@ def build_graph():
 
     g.add_edge("clinera_get", "agent_reason")  # loop back to re-reason after a fetch
     g.add_edge("draft_recommendations", "store_and_gate")
-    g.add_edge("store_and_gate", END)
+    g.add_edge("store_and_gate", "assemble_report")
+    g.add_edge("assemble_report", END)
 
     return g.compile()
