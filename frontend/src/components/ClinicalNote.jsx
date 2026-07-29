@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Stethoscope, ScrollText, Activity, ClipboardCheck, Quote } from 'lucide-react'
+import { Stethoscope, ScrollText, Activity, ClipboardCheck, Quote, User, ClipboardList, Check, X } from 'lucide-react'
 import './ClinicalNote.css'
 
 const sectionConfig = [
@@ -8,7 +8,15 @@ const sectionConfig = [
   { key: 'plan', label: 'Plan', icon: ClipboardCheck },
 ]
 
-function ClinicalNote({ note, segments }) {
+function formatStatus(status) {
+  if (!status) return ''
+  return status
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+function ClinicalNote({ note, segments, patient, recommendations = [] }) {
   const [openSegment, setOpenSegment] = useState(null)
 
   const segmentByIndex = new Map(segments.map((segment) => [segment.index, segment]))
@@ -64,6 +72,38 @@ function ClinicalNote({ note, segments }) {
           <p className="clinical-note-section-body">{note[key]}</p>
         </section>
       ))}
+
+      {recommendations.length > 0 ? (
+        <section className="clinical-note-section">
+          <h3 className="clinical-note-section-title">
+            <ClipboardList size={16} strokeWidth={1.75} />
+            Recommendations
+          </h3>
+          <div className="recommendations-list">
+            {recommendations.map((rec) => (
+              <div className="recommendation-item" key={rec.id}>
+                <div className="recommendation-heading">
+                  <span className="recommendation-order-type">{rec.order_type}</span>
+                  <p className="recommendation-details">{rec.details}</p>
+                </div>
+                <div className="recommendation-footer">
+                  <span className="recommendation-status">{formatStatus(rec.status)}</span>
+                  <div className="recommendation-actions">
+                    <button type="button" className="recommendation-btn approve" aria-label="Approve">
+                      <Check size={14} strokeWidth={2} />
+                      Yes
+                    </button>
+                    <button type="button" className="recommendation-btn reject" aria-label="Reject">
+                      <X size={14} strokeWidth={2} />
+                      No
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
     </div>
   )
