@@ -25,6 +25,36 @@ function ClinicalNote({ note, segments }) {
         </div>
       </div>
 
+      {patient ? (
+        <section className="patient-banner">
+          <h3 className="clinical-note-section-title">
+            <User size={16} strokeWidth={1.75} />
+            Patient
+          </h3>
+          <div className="clinical-note-patient">
+            <div className="clinical-note-patient-info">
+              <p className="clinical-note-patient-name">{patient.name}</p>
+              <span className="clinical-note-patient-mrn">MRN {patient.mrn}</span>
+            </div>
+          </div>
+          <div className="clinical-note-patient">
+            <div className="clinical-note-patient-info">
+              {patient.diagnosis ? (
+                <>
+                <p className="clinical-note-patient-name">Diagnosis</p>
+                <span className="clinical-note-patient-mrn">{patient.diagnosis}</span>
+                </>
+              ) : (
+                <p className="clinical-note-patient-name">No previous Diagnosis</p>
+              )}
+
+            </div>
+          </div>
+
+          
+        </section>
+      ) : null}
+
       {sectionConfig.map(({ key, label, icon: Icon }) => (
         <section className="clinical-note-section" key={key}>
           <h3 className="clinical-note-section-title">

@@ -45,6 +45,19 @@
   color: var(--color-text);
 }
 
+.patient-banner{
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column ;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-patient-primary) 10%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-text-muted) 25%, var(--color-border));
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
 .clinical-note-section {
   padding-bottom: 16px;
   border-bottom: 1px solid var(--color-border);

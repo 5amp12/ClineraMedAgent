@@ -108,7 +108,7 @@ function Reports() {
          <section className="reports-recap">
            {activeTab === 'Report' ? (
              reportData && reportData.report ? (
-               <ClinicalNote note={reportData.report} segments={[]} />
+               <ClinicalNote note={reportData.report} segments={[]} patient={reportData.patient} recommendations={reportData.recommendations}/>
              ) : (
                <p>Loading...</p>
              )
