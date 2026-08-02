@@ -1,0 +1,256 @@
+.clinical-note {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+
+.clinical-note-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 25%, var(--color-border));
+}
+
+.clinical-note-banner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 9px;
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.clinical-note-banner-label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-primary-dark);
+  margin-bottom: 4px;
+}
+
+.clinical-note-banner-text {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--color-text);
+}
+
+.patient-banner{
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column ;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-patient-primary) 10%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-text-muted) 25%, var(--color-border));
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.clinical-note-section {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.clinical-note-section:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.clinical-note-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+}
+
+.clinical-note-section-body {
+  margin: 0;
+  padding-left: 24px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--color-text);
+}
+
+.clinical-note-patient {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.clinical-note-patient-name {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.clinical-note-patient-mrn {
+  font-size: 12.5px;
+  color: var(--color-text-faint);
+}
+
+.clinical-note-patient-diagnosis {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.recommendations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.recommendation-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.recommendation-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.recommendation-order-type {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 15%, var(--color-surface));
+  color: var(--color-primary-dark);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.recommendation-details {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.recommendation-rationale {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.recommendation-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.recommendation-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-faint);
+}
+
+.recommendation-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.recommendation-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.recommendation-btn.approve:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary-dark);
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+}
+
+.recommendation-btn.reject:hover {
+  border-color: #e5484d;
+  color: #e5484d;
+  background: color-mix(in srgb, #e5484d 12%, var(--color-surface));
+}
+
+.clinical-note-sources {
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.clinical-note-sources-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-faint);
+  margin-bottom: 10px;
+}
+
+.clinical-note-source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.clinical-note-source-chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.clinical-note-source-chip:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary-dark);
+}
+
+.clinical-note-source-chip.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
