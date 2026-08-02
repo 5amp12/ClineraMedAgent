@@ -6,12 +6,13 @@ from app.schemas.inbound import InboundVisitPayload
 CLINERA_BASE_URL = os.getenv("CLINERA_URL")
 CLINERA_API_KEY = os.getenv("CLINERA_API_KEY")
 
+#39
 def get_board_meeting_event(board_id: int):
     if not CLINERA_BASE_URL or not CLINERA_API_KEY:
-        return RuntimeError("Clinera base url and clinera api key must be set")
+        raise RuntimeError("Clinera base url and clinera api key must be set")
     
-    if not CLINERA_API_KEY.startswith("https://"):
-        return RuntimeError("Clinera base url must use https")
+    if not CLINERA_BASE_URL.startswith("https://"):
+        raise RuntimeError("Clinera base url must use https")
 
     url = f"{CLINERA_BASE_URL}/api/board-meeting-events/board/{board_id}"
     headers = {
@@ -26,6 +27,7 @@ def get_board_meeting_event(board_id: int):
     
     #Checks payload shape, raises if wrong
     payload = InboundVisitPayload.model_validate(r.json())
+
          
     return payload
 
