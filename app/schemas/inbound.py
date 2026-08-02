@@ -40,8 +40,8 @@ class BoardSection(BaseModel):
     id: int
     title: str
     date: datetime
-    status: Literal["Completed"]
-    admin: AdminSegment
+    status: Literal["Completed", "Not Started"]
+    admin: Optional[AdminSegment]
 
 class ParticipantSection(BaseModel):
     id: int
@@ -55,7 +55,7 @@ class PatientSection(BaseModel):
     name: str
     gender: str
     date_of_birth: date
-    diagnosis_type: DiagnosisTypeSegment
+    diagnosis_type: Optional[DiagnosisTypeSegment]
     medical_files: list[MedicalFileSegment]
     recommendations: Optional[list[RecommendationSegment]]   #Might not be optional
     diagnosticInstances: list[DiagnosticInstanceSegment]
