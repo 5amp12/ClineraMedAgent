@@ -18,9 +18,7 @@ def _clinical(note: dict[str, Any]) -> dict[str, Any]:
     return {k: note.get(k) for k in _CLINICAL_FIELDS}
 
 
-def _patient(patients: list[dict[str, Any]]) -> dict[str, Any]:
-    # One report per run -> the primary (first) board patient. Multi-patient boards are future work.
-    p = patients[0] if patients else {}
+def _patient_ref(p: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": p.get("id"),
         "mrn": p.get("mrn"),
@@ -41,10 +39,15 @@ def assemble_report(state: PipelineState) -> dict[str, Any]:
     # Orders (with their ids + pending_approval status) live on the persisted record.
     orders = (persistence.get(visit_id) or {}).get("orders", [])
 
+    patients = state.get("patients") or []
+
     report = {
         "id": visit_id,
         "report": _clinical(state.get("note") or {}),
-        "patient": _patient(state.get("patients") or []),
+        # The FIRST board patient only — kept because the frontend reads report.patient (singular).
+        "patient": _patient_ref(patients[0] if patients else {}),
+        # Every patient discussed, so each order's patient_id is resolvable from the report alone.
+        "patients": [_patient_ref(p) for p in patients],
         "board_id": board.get("id"),
         "board_title": board.get("title"),
         "transcript_id": state.get("transcript_id"),
@@ -57,7 +60,11 @@ def assemble_report(state: PipelineState) -> dict[str, Any]:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "generated_by": MODEL,
         "provenance": list(audit),
-        "supporting_data": state.get("fetched", []),
+        # What actually informed the recommendations: agent_reason's per-patient triage, each entry
+        # stamped with patient_id/patient_name. Includes the gaps it could not resolve, since
+        # nothing can resolve them automatically. (Previously this carried FHIR read results from
+        # the mock fetch loop.)
+        "supporting_data": state.get("assessments", []),
     }
 
     persistence.attach_report(visit_id, report)

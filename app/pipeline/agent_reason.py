@@ -1,6 +1,21 @@
-#The reasoning step (ReAct). Looks at the note + patient diagnostics + anything fetched so far
-#and decides: pull MORE clinical data from the FHIR record (-> clinera_get), or move on
-#(-> draft_recommendations). This is a LangGraph node; it returns only the keys it updates.
+#The reasoning step. Produces a clinical triage assessment PER PATIENT, which
+#draft_recommendations then drafts from.
+#
+#One model call per patient, each seeing ONLY that patient's record — no other patient, and not
+#the board-level meeting note. Two reasons, both learned the hard way on board 170 (two patients
+#who both have bladder cancer):
+#  * A single call covering every patient produces text that cannot be tied back to one of them,
+#    and quietly spends its whole answer on whichever record is richest — one patient got skipped.
+#  * The meeting note is written across the whole board and skews to the richest record, so
+#    passing it in leaked one patient's facts into another's output (Final Test's FGFR3 mutation
+#    and February follow-up showed up in Tiger Welch's orders; he has neither).
+#Scoping each call to one patient means attribution comes from the loop, not the model's judgment.
+#
+#This node used to run a ReAct fetch/proceed loop against a FHIR record. There is no FHIR backend:
+#the Clinera spec exposes one board-context call returning the complete record up front, so there
+#was nothing to iteratively retrieve — the loop just recycled canned data into invented findings.
+#
+#LangGraph node; returns only the keys it updates.
 
 from __future__ import annotations
 
@@ -10,108 +25,83 @@ from typing import Any
 from app.pipeline.llm import client, MODEL
 from app.pipeline.state import PipelineState
 
-# How many FHIR fetches we allow before forcing the pipeline to move on. Guards the
-# clinera_get -> agent_reason loop against spinning forever.
-MAX_FETCHES = 3
-
-# FHIR resources agent_reason is allowed to request. Taken from the resources the repo
-# already knows about (data/medagentbench/funcs_v1.json).
-FHIR_RESOURCES = ["Condition", "Observation", "MedicationRequest", "Procedure", "Patient"]
-
 _SYSTEM = (
-    "You are a clinical decision-support agent reviewing the output of an MDT (multi-"
-    "disciplinary team) board meeting. You are given the drafted visit note, the board's "
-    "structured patient diagnostics, and any clinical data already retrieved from the FHIR "
-    "record. Decide whether you have enough information to safely draft recommendations, or "
-    "whether you must first retrieve additional clinical data (labs, conditions, active "
-    "medications, procedures). Only request data that is genuinely missing and material to the "
-    "recommendation. When in doubt and nothing material is missing, proceed."
+    "You are a clinical decision-support agent reviewing one patient's case from an MDT (multi-"
+    "disciplinary team) board meeting. You are given the complete record for a SINGLE patient — "
+    "history, diagnostics, genetics, current medications and symptoms. Assess what the board is "
+    "deciding for this patient, and state plainly what the record does NOT tell you. Do not "
+    "invent findings, results, or medications: if something material is missing, name it as a "
+    "gap rather than assuming a value. A sparse or placeholder-looking record is itself a "
+    "finding — report it as gaps rather than filling it in."
 )
 
-# The decision shape the model must return. resource/params are only meaningful when
-# action == "fetch".
-DECISION_SCHEMA: dict[str, Any] = {
+# Triage output. `gaps` is deliberately part of the contract: the previous design expressed missing
+# information by fetching it, and with no source to fetch from, unmet needs must stay visible
+# rather than being silently filled in by the model.
+ASSESSMENT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "action": {
-            "type": "string",
-            "enum": ["fetch", "proceed"],
-            "description": "'fetch' to retrieve more FHIR data, 'proceed' to move on to drafting.",
+        "key_considerations": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "The clinical decisions this board is making, one per entry.",
         },
-        "resource": {
-            "type": "string",
-            "enum": FHIR_RESOURCES,
-            "description": "Which FHIR resource to read. Required when action is 'fetch'.",
-        },
-        "params": {
-            "type": "object",
-            "description": "FHIR query params, e.g. {\"patient\": \"119\", \"code\": \"HbA1c\"}.",
-            "additionalProperties": {"type": "string"},
+        "gaps": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Material information absent from the record. Empty if nothing is missing.",
         },
         "rationale": {
             "type": "string",
-            "description": "One line explaining the decision.",
+            "description": "One line summarizing the overall clinical picture.",
         },
     },
-    "required": ["action", "rationale"],
+    "required": ["key_considerations", "gaps", "rationale"],
     "additionalProperties": False,
 }
 
 
-def _context(state: PipelineState) -> str:
-    # The user-message payload the model reasons over.
-    return json.dumps(
-        {
-            "note": state.get("note", {}),
-            "patients": state.get("patients", []),
-            "already_fetched": state.get("fetched", []),
-        },
-        ensure_ascii=False,
-        default=str,
-    )
+def _context(patient: dict[str, Any]) -> str:
+    # ONE patient record and nothing else — see the module header for why the board-level
+    # meeting note is excluded.
+    return json.dumps({"patient": patient}, ensure_ascii=False, default=str)
 
 
-def _decide(state: PipelineState) -> dict[str, Any]:
-    # Structured OpenAI call. Function calling is used (not strict json_schema) because the
-    # decision has optional fields (resource/params) with free-form params.
+def _assess(patient: dict[str, Any]) -> dict[str, Any]:
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
             {"role": "system", "content": _SYSTEM},
-            {"role": "user", "content": _context(state)},
+            {"role": "user", "content": _context(patient)},
         ],
-        tools=[{"type": "function", "function": {"name": "decision", "parameters": DECISION_SCHEMA}}],
-        tool_choice={"type": "function", "function": {"name": "decision"}},
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "assessment", "schema": ASSESSMENT_SCHEMA, "strict": True},
+        },
     )
-    return json.loads(response.choices[0].message.tool_calls[0].function.arguments)
+    return json.loads(response.choices[0].message.content)
 
 
 def agent_reason(state: PipelineState) -> dict[str, Any]:
     audit = state.get("audit_log", [])
-    fetch_count = state.get("fetch_count", 0)
+    patients = state.get("patients", [])
 
-    # Cap short-circuit: once we've fetched enough, force progress WITHOUT calling the model.
-    # (Also keeps this path runnable before the model call is wired up.)
-    if fetch_count >= MAX_FETCHES:
-        return {
-            "decision": "proceed",
-            "audit_log": audit + [f"agent_reason: fetch cap ({MAX_FETCHES}) reached -> proceed"],
-        }
+    assessments: list[dict[str, Any]] = []
+    for patient in patients:
+        assessment = _assess(patient)
+        # patient_id/patient_name are stamped here, from the loop — never returned by the model,
+        # which is why they cannot be mis-attributed.
+        assessments.append({
+            "patient_id": patient.get("id"),
+            "patient_name": patient.get("name"),
+            **assessment,
+        })
 
-    decision = _decide(state)
-    action = decision["action"]
-    update: dict[str, Any] = {
-        "decision": action,
-        "audit_log": audit + [f"agent_reason: {action} — {decision.get('rationale', '')}"],
+    total_gaps = sum(len(a.get("gaps", [])) for a in assessments)
+    return {
+        "assessments": assessments,
+        "audit_log": audit + [
+            f"agent_reason: assessed {len(assessments)} patients individually "
+            f"({total_gaps} gaps total)"
+        ],
     }
-    if action == "fetch":
-        update["fetch_request"] = {
-            "resource": decision.get("resource"),
-            "params": decision.get("params", {}),
-        }
-    return update
-
-
-def route_after_reason(state: PipelineState) -> str:
-    # Conditional edge: which node runs next after agent_reason.
-    return "clinera_get" if state.get("decision") == "fetch" else "draft_recommendations"
