@@ -1,10 +1,9 @@
-import { NavLink, Link } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import {
   Sparkles,
   UserPlus,
   Wand2,
   FileText,
-  Folder,
   Calendar,
   Plug,
   Star,
@@ -12,13 +11,11 @@ import {
   Lightbulb,
   ClipboardList,
   PlusCircle,
-  ChevronRight,
 } from 'lucide-react'
 import './Sidebar.css'
 
 const primaryNavItems = [
   { to: '/reports', label: 'Reports', icon: FileText },
-  { to: '/folders', label: 'Folders', icon: Folder },
 ]
 
 function NavItem({ to, label, icon: Icon }) {
@@ -68,14 +65,13 @@ function Sidebar() {
           </div>
         </div>
 
-        <Link to="/signin" className="sidebar-profile">
+        <div className="sidebar-profile">
           <span className="sidebar-avatar">SP</span>
           <span className="sidebar-profile-info">
             <span className="sidebar-profile-name">Samuel Passey</span>
             <span className="sidebar-profile-email">sampassey2@gmail.com</span>
           </span>
-          <ChevronRight size={16} strokeWidth={1.75} />
-        </Link>
+        </div>
       </div>
     </aside>
   )

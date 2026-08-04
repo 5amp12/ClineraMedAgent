@@ -6,13 +6,12 @@ import {
   Download,
   Send,
   Share2,
+  Check,
   MoreHorizontal,
   Calendar,
   Clock,
   Video,
   Users,
-  Search,
-  Copy,
   Maximize2,
   Lock,
   ArrowUp,
@@ -23,17 +22,48 @@ import { report } from "../../api/ReportCall.js"
 import ClinicalNote from '../components/ClinicalNote.jsx'
 import './Reports.css'
 
-const tabs = ['Report', 'Transcript']
+const tabs = ['Report']
+
+function formatDate(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function formatTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
+function buildReportText(reportData) {
+  const note = reportData.report || {}
+  const lines = [
+    reportData.board_title || 'Board Report',
+    [formatDate(reportData.date), formatTime(reportData.start_time)].filter(Boolean).join(' · '),
+    '',
+    'Reason for Visit', note.reason_for_visit || '', '',
+    'History', note.history || '', '',
+    'Findings', note.findings || '', '',
+    'Plan', note.plan || '',
+  ]
+
+  if (reportData.recommendations?.length) {
+    lines.push('', 'Recommendations')
+    reportData.recommendations.forEach((rec) => {
+      lines.push(`- ${[rec.order_type, rec.details].filter(Boolean).join(': ')}`)
+    })
+  }
+
+  return lines.join('\n')
+}
 
 function Reports() {
   const [activeTab, setActiveTab] = useState('Report')
-  const [search, setSearch] = useState('')
   const [reportData, setReportData] = useState('')
-
-  // const visibleChapters = chapters.filter((chapter) =>
-  //   chapter.title.toLowerCase().includes(search.toLowerCase()) ||
-  //   chapter.body.toLowerCase().includes(search.toLowerCase()),
-  // )
+  const [copied, setCopied] = useState(false)
 
   const params = useParams();
   useEffect(() => {
@@ -50,8 +80,21 @@ function Reports() {
 
   })
 
-  
-  
+  function handleDownload() {
+    const blob = new Blob([buildReportText(reportData)], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${(reportData.board_title || 'report').replace(/[^a-z0-9]+/gi, '-')}.txt`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleShare() {
+    await navigator.clipboard.writeText(window.location.href)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   return (
     <div className="reports-page">
@@ -63,13 +106,13 @@ function Reports() {
           <h1 className="reports-title">{reportData.board_title}</h1>
         </div>
         <div className="reports-header-right">
-          <button type="button" className="pill-btn">
+          <button type="button" className="pill-btn" onClick={handleDownload}>
             <Download size={15} />
             Download
           </button>
-          <button type="button" className="pill-btn primary">
-            <Share2 size={15} />
-            Share
+          <button type="button" className="pill-btn primary" onClick={handleShare}>
+            {copied ? <Check size={15} /> : <Share2 size={15} />}
+            {copied ? 'Copied' : 'Share'}
           </button>
         </div>
       </header>
@@ -77,12 +120,12 @@ function Reports() {
       <div className="reports-meta">
         <span className="reports-meta-item">
           <Calendar size={14} />
-          {reportData.date}
+          {formatDate(reportData.date)}
         </span>
         <span className="reports-meta-dot">&middot;</span>
         <span className="reports-meta-item">
           <Clock size={14} />
-          {reportData.start_time}
+          {formatTime(reportData.start_time)}
         </span>
         <span className="reports-meta-dot">&middot;</span>
         <span className="reports-meta-item">
@@ -106,50 +149,10 @@ function Reports() {
 
        <div className="reports-body">
          <section className="reports-recap">
-           {activeTab === 'Report' ? (
-             reportData && reportData.report ? (
-               <ClinicalNote note={reportData.report} segments={[]} patient={reportData.patient} recommendations={reportData.recommendations}/>
-             ) : (
-               <p>Loading...</p>
-             )
-           ) : activeTab === 'Transcript' ? (
-             <>
-               <div className="reports-search">
-                <div className="reports-search-input">
-                   <Search size={15} />
-                   <input
-                     type="text"
-                    placeholder="Search recap..."
-                     value={search}
-                     onChange={(event) => setSearch(event.target.value)}
-                   />
-                 </div>
-                 <button type="button" className="icon-btn" aria-label="Copy recap">
-                   <Copy size={15} />
-                 </button>
-               </div>
-
-               <h2 className="reports-section-title">Key Discussion Points</h2>
-
-               <div className="reports-discussion-list">
-                 {visibleChapters.map((chapter) => (
-                  <div className="reports-discussion-item" key={chapter.time}>
-                     <div className="reports-discussion-heading">
-                                            <span className="reports-discussion-time">{chapter.time}</span>
-                       <span className="reports-discussion-title">{chapter.title}</span>
-                     </div>
-                     <p className="reports-discussion-body">{chapter.body}</p>
-                   </div>
-                 ))}
-                 {visibleChapters.length === 0 ? (
-                   <p className="reports-discussion-empty">No discussion points match your search.</p>
-                 ) : null}
-               </div>
-             </>
+           {reportData && reportData.report ? (
+             <ClinicalNote note={reportData.report} segments={[]} patient={reportData.patient} recommendations={reportData.recommendations}/>
            ) : (
-             <div className="reports-tab-placeholder">
-               <p>{activeTab} content isn&apos;t wired up yet in this sample.</p>
-             </div>
+             <p>Loading...</p>
            )}
          </section>
        </div>
