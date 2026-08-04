@@ -1,34 +1,21 @@
-import os 
-import requests
+#Fetches board context from Clinera: board metadata, participants, patients (with diagnostics),
+#and the chronological event log. Auth + base URL now live in clinera_client; this module owns the
+#endpoint path and the payload-shape validation.
+#
+#Note there is no transcript endpoint on the Clinera side — the only recorded artifact is a binary
+#audio/video download (/board/{id}/recording). Until that gets transcribed, the pipeline's
+#transcript is synthesized from the structured data returned here (see app/pipeline/fetch_board.py).
+
+from __future__ import annotations
 
 from app.schemas.inbound import InboundVisitPayload
+from app.services import clinera_client
 
-CLINERA_BASE_URL = os.getenv("CLINERA_URL")
-CLINERA_API_KEY = os.getenv("CLINERA_API_KEY")
+BOARD_EVENTS_PATH = "/api/board-meeting-events/board/{board_id}"
 
-#39
-def get_board_meeting_event(board_id: int):
-    if not CLINERA_BASE_URL or not CLINERA_API_KEY:
-        raise RuntimeError("Clinera base url and clinera api key must be set")
-    
-    if not CLINERA_BASE_URL.startswith("https://"):
-        raise RuntimeError("Clinera base url must use https")
 
-    url = f"{CLINERA_BASE_URL}/api/board-meeting-events/board/{board_id}"
-    headers = {
-        "Authorization": f"Bearer {CLINERA_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    
-    r = requests.get(url, headers=headers, timeout=10)
+def get_board_meeting_event(board_id: int) -> InboundVisitPayload:
+    data = clinera_client.get_json(BOARD_EVENTS_PATH.format(board_id=board_id))
 
-    #Checks status, raises 4** or 5**                             
-    r.raise_for_status()                    
-    
-    #Checks payload shape, raises if wrong
-    payload = InboundVisitPayload.model_validate(r.json())
-
-         
-    return payload
-
-    
+    #Checks payload shape, raises pydantic ValidationError if Clinera's shape has drifted
+    return InboundVisitPayload.model_validate(data)
