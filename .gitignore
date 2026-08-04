@@ -129,6 +129,10 @@ celerybeat.pid
 
 # Environments
 .env
+
+# Local persistence store (app/services/persistence.py) — holds patient data, never commit.
+clinera.db
+*.db
 .venv
 env/
 venv/
