@@ -86,6 +86,26 @@ def get_session(force_login: bool = False) -> requests.Session:
     return session
 
 
+def post_json(path: str, body: dict[str, Any]) -> Any:
+    """POST an API path and return parsed JSON. Same one-shot re-login on 401 as get_json.
+
+    This WRITES to Clinera. The only caller is clinera_publish.
+
+    Note the integration guide specifies `Authorization: Bearer <AI_SERVICE_TOKEN>` for the
+    board-ai-summaries endpoints. No such token was issued, so this goes out with the session
+    cookie like every other call. That works for the GET endpoints; if the write route rejects
+    cookie auth, that is a question for the Clinera team rather than something to work around here.
+    """
+    url = f"{base_url()}{path}"
+
+    response = get_session().post(url, json=body, timeout=TIMEOUT)
+    if response.status_code == 401:
+        response = get_session(force_login=True).post(url, json=body, timeout=TIMEOUT)
+
+    response.raise_for_status()
+    return response.json()
+
+
 def get_json(path: str, params: dict[str, Any] | None = None) -> Any:
     """GET an API path (e.g. "/api/board-meeting-events/board/267") and return parsed JSON.
 
