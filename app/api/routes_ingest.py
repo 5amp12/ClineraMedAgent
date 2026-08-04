@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import ValidationError
 
 from app.services import clinera_client
+from app.services.board_summary import get_board_summary
 from app.services.transcript_ingest import get_board_meeting_event
 
 router = APIRouter()
@@ -50,5 +51,13 @@ def _handle(exc: Exception) -> HTTPException:
 def ingest(board_id: int):
     try:
         return get_board_meeting_event(board_id)
+    except Exception as exc:
+        raise _handle(exc) from exc
+
+
+@router.get("/boards/{board_id}/summary")
+def board_summary(board_id: int):
+    try:
+        return get_board_summary(board_id)
     except Exception as exc:
         raise _handle(exc) from exc
