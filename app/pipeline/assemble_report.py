@@ -51,7 +51,17 @@ def assemble_report(state: PipelineState) -> dict[str, Any]:
         "board_id": board.get("id"),
         "board_title": board.get("title"),
         "transcript_id": state.get("transcript_id"),
-        "doctors_attended": [p.get("id") for p in (state.get("participants") or [])],
+        # Names, not bare ids — this is rendered as an attendee list, and "6" tells a reader
+        # nothing. id is kept alongside so a consumer can still key off it.
+        "doctors_attended": [
+            {"id": p.get("id"), "name": p.get("name"), "title": p.get("title")}
+            for p in (state.get("participants") or [])
+        ],
+        # No `transcript` field. The segments exist in pipeline state, but neither UI consumer can
+        # use them as-is: ClinicalNote keys segments by a `.index` they don't carry, and the
+        # Transcript tab renders timestamped {time, title, body} chapters, which is a different
+        # artifact we have no meeting timestamps to build (every board returns zero events).
+        # Left out rather than shipped in a shape nothing reads.
         "date": (board_date or "")[:10] or None,
         "start_time": min(times) if times else board_date,
         "end_time": max(times) if times else board_date,

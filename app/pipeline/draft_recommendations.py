@@ -110,11 +110,19 @@ def draft_recommendations(state: PipelineState) -> dict[str, Any]:
     by_patient = {a.get("patient_id"): a for a in state.get("assessments", [])}
 
     recommendations: list[dict[str, Any]] = []
+    malformed = 0
     for patient in patients:
         patient_id = patient.get("id")
         assessment = by_patient.get(patient_id, {})
 
         for order in _draft(patient, assessment):
+            # Function calling is not strict, so the model can return an item that doesn't match
+            # RECOMMENDATION_SCHEMA — a bare string, say. Drop it rather than crash the whole
+            # board: one malformed order for one patient must not cost the other patients their
+            # recommendations. Counted in the audit log so it isn't silent.
+            if not isinstance(order, dict):
+                malformed += 1
+                continue
             # Attribution is stamped from the loop variable, NOT returned by the model. The model
             # never sees another patient's record in this call and is never asked for an id, so an
             # order cannot be assigned to the wrong patient. On a board like 170 — two patients
@@ -123,10 +131,12 @@ def draft_recommendations(state: PipelineState) -> dict[str, Any]:
             order["patient_name"] = patient.get("name")
             recommendations.append(order)
 
+    line = (f"draft_recommendations: {len(recommendations)} proposed across "
+            f"{len(patients)} patients")
+    if malformed:
+        line += f" ({malformed} malformed item(s) from the model dropped)"
+
     return {
         "recommendations": recommendations,
-        "audit_log": audit + [
-            f"draft_recommendations: {len(recommendations)} proposed across "
-            f"{len(patients)} patients"
-        ],
+        "audit_log": audit + [line],
     }

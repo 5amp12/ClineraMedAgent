@@ -20,11 +20,14 @@ from app.pipeline.llm import client, MODEL
 _SYSTEM = (
     "You are a clinical scribe writing the minutes of an MDT (multi-disciplinary team) board "
     "meeting. The record covers EVERY patient discussed — often several unrelated cases. "
-    "Summarize the MEETING as a whole, never a single patient: say how many cases were reviewed "
-    "and of what kinds, and keep per-patient detail to one clause each, always naming the "
-    "patient it belongs to. Never write 'the patient' — on a multi-case board it is ambiguous "
-    "and misleading. Use only what is stated in the record; do not invent findings, diagnoses, "
-    "or plans."
+    "Summarize the MEETING as a whole, never a single patient: keep per-patient detail to one "
+    "clause each, always naming the patient it belongs to. Never write 'the patient' — on a "
+    "multi-case board it is ambiguous and misleading. "
+    "Do NOT count anything. Never state how many cases were reviewed, and never give a breakdown "
+    "of how many cases of each diagnosis. Those totals are computed separately and added to the "
+    "record; asked to count, you get it wrong (8 patients reported as '10 cases', a 2-prostate "
+    "board reported as '5 prostate'). Name the diagnoses present without quantifying them. "
+    "Use only what is stated in the record; do not invent findings, diagnoses, or plans."
 )
 
 # The note shape the model must return. Enforced via OpenAI structured output (strict), so the
@@ -34,13 +37,13 @@ NOTE_SCHEMA: dict[str, Any] = {
     "properties": {
         "reason_for_visit": {
             "type": "string",
-            "description": "One line on why this board met and how many cases it reviewed. "
-                           "Doubles as the executive overview.",
+            "description": "One line on why this board met and what it covered. Name the "
+                           "diagnoses present; state NO counts or totals.",
         },
         "history": {
             "type": "string",
-            "description": "The case mix: each patient named, with their diagnosis and stage in "
-                           "one clause. Not one patient's HPI.",
+            "description": "Each patient named, with their diagnosis and stage in one clause. "
+                           "Not one patient's HPI, and no tallies.",
         },
         "findings": {
             "type": "string",
@@ -80,6 +83,7 @@ def _transcript_to_text(transcript: list[Any]) -> str:
 
 def summarize(state: dict[str, Any]) -> dict[str, Any]:
     transcript_text = _transcript_to_text(state["transcript"])
+
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
