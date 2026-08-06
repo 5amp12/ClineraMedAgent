@@ -400,3 +400,25 @@
     min-width: 0;
   }
 }
+
+.reports-error {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid #e6b7b7;
+  border-radius: 8px;
+  background: #fdf3f3;
+  color: #8a2a2a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.reports-pending {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}

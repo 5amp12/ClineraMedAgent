@@ -254,3 +254,85 @@
   border-color: var(--color-primary);
   color: #fff;
 }
+
+/* --- multi-patient layout ------------------------------------------------- */
+
+.patient-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.patient-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: var(--color-surface);
+}
+
+/* One block per patient, so a board of eight cases stops reading as a single paragraph. */
+.note-entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.note-entry-patient {
+  margin: 0 0 3px;
+  padding-left: 24px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.clinical-note-section-note {
+  margin: 0 0 12px;
+  padding-left: 24px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text-faint);
+}
+
+.recommendation-group {
+  margin-bottom: 16px;
+}
+
+.recommendation-group-name {
+  margin: 0 0 7px;
+  padding-left: 24px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.recommendation-rationale {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+
+.recommendation-error {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8a2a2a;
+}
+
+.recommendation-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.rec-spin {
+  animation: rec-spin 1s linear infinite;
+}
+
+@keyframes rec-spin {
+  to { transform: rotate(360deg); }
+}

@@ -2,63 +2,74 @@
 // server-side (app/services/clinera_client.py) and must never end up in browser-shipped JS.
 const API_BASE = "http://localhost:8000"
 
-// /boards/{id} returns Clinera's raw board/patients/events shape, not the reason_for_visit/
-// history/findings/plan "report" shape ClinicalNote.jsx renders (that only exists once the LLM
-// pipeline runs). This stitches a readable note together from the raw fields so the frontend
-// has something real to show in the meantime — same field names Reports.jsx already reads.
-function joinPerPatient(patients, pick) {
-    return patients
-        .map((patient) => {
-            const value = pick(patient)
-            return value ? `${patient.name}: ${value}` : null
-        })
-        .filter(Boolean)
-        .join('; ')
-}
-
-function mapBoardToReport(raw) {
-    const board = raw.board || {}
-    const patients = raw.patients || []
-    const primaryPatient = patients[0] || {}
-
-    const diagnoses = [...new Set(patients.map((p) => p.diagnosis_type?.display_name).filter(Boolean))]
-
-    return {
-        board_title: board.title,
-        date: board.date,
-        start_time: board.date,
-        patient: {
-            name: primaryPatient.name,
-            mrn: primaryPatient.mrn,
-            diagnosis: primaryPatient.diagnosis_type?.display_name,
-        },
-        report: {
-            reason_for_visit: diagnoses.length
-                ? `MDT board meeting to discuss ${diagnoses.join(', ')} cases presented.`
-                : board.title,
-            history: joinPerPatient(patients, (p) => p.summary || p.history_present_illness || p.past_medical_history),
-            findings: joinPerPatient(patients, (p) => p.diagnosis_type?.display_name),
-            plan: joinPerPatient(patients, (p) => (p.recommendations || []).map((r) => r.text).join(' ')),
-        },
-        recommendations: patients.flatMap((p) =>
-            (p.recommendations || []).map((rec) => ({
-                id: rec.id,
-                order_type: rec.author,
-                details: rec.text,
-                status: null,
-            })),
-        ),
+// FastAPI puts the useful message in `detail`; falling back to the raw body keeps us honest when
+// the failure came from somewhere else (a proxy, a CORS block) and there is no JSON at all.
+async function failure(response, what) {
+    let detail
+    try {
+        const body = await response.json()
+        detail = body.detail || JSON.stringify(body)
+    } catch {
+        detail = await response.text()
     }
+    return new Error(`${what} (${response.status}): ${detail}`)
 }
 
-export async function report(id) {
-    const response = await fetch(`${API_BASE}/boards/${id}`)
-
+async function request(path, options) {
+    const response = await fetch(`${API_BASE}${path}`, options)
     if (!response.ok) {
-        const detail = await response.text()
-        throw new Error(`Failed to load report for board ${id}: ${response.status} ${detail}`)
+        throw await failure(response, `Request to ${path} failed`)
     }
+    return response.json()
+}
 
-    const raw = await response.json()
-    return mapBoardToReport(raw)
+function postJson(path, body) {
+    return request(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body ?? {}),
+    })
+}
+
+/**
+ * Poll target for one visit. Returns the run envelope, NOT a bare report:
+ *   { run_status: 'running' }                     — still working, poll again
+ *   { run_status: 'ready',  report: {...} }       — done
+ *   { run_status: 'failed', error: '...' }        — the run raised
+ *   { run_status: 'halted', halt_reason: '...' }  — governance refused the board
+ *
+ * The envelope exists because the report has its own `status` field (the approval gate status),
+ * so run state could not share that key.
+ */
+export function report(visitId) {
+    return request(`/reports/${encodeURIComponent(visitId)}`)
+}
+
+/** Every past run, newest first, for the landing page list. */
+export function listReports() {
+    return request('/reports')
+}
+
+/**
+ * Kick off a pipeline run for a Clinera board. `transcript` is optional — without it the pipeline
+ * synthesizes one from the structured board record. Returns { visit_id, run_status } immediately;
+ * a full board is ~17 sequential model calls, so the caller polls report() from there.
+ */
+export function runBoard(boardId, transcript) {
+    return postJson(`/boards/${encodeURIComponent(boardId)}/run`, { transcript: transcript || null })
+}
+
+/** Approve one proposed order. Resolves to the updated order. */
+export function approveOrder(visitId, orderId) {
+    return postJson(
+        `/visits/${encodeURIComponent(visitId)}/orders/${encodeURIComponent(orderId)}/approve`,
+    )
+}
+
+/** Reject one proposed order. Rejections are published to Clinera too — see approval/gate.py. */
+export function rejectOrder(visitId, orderId, reason) {
+    return postJson(
+        `/visits/${encodeURIComponent(visitId)}/orders/${encodeURIComponent(orderId)}/reject`,
+        { reason: reason || '' },
+    )
 }
