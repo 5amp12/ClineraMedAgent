@@ -117,6 +117,31 @@ def build_transcript(payload: dict[str, Any]) -> list[dict[str, str]]:
     return segments
 
 
+def parse_transcript_text(text: str) -> list[dict[str, str]]:
+    """Parse a pasted transcript into the {"speaker", "text"} shape summarize already accepts.
+
+    Deliberately forgiving: MDT minutes get pasted from Word, Teams exports, or typed by hand, and
+    rejecting a transcript over its formatting would be the wrong trade. A leading "Speaker:" is
+    used when present; anything else is attributed to "board record", the same neutral speaker
+    build_transcript uses for structured data.
+
+    A colon only splits a speaker when it appears early in the line — otherwise "Plan: continue
+    abiraterone" would turn the word "Plan" into a participant.
+    """
+    segments: list[dict[str, str]] = []
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        speaker, _, remainder = line.partition(":")
+        if remainder.strip() and 0 < len(speaker) <= 40 and "." not in speaker:
+            segments.append({"speaker": speaker.strip(), "text": remainder.strip()})
+        else:
+            segments.append({"speaker": "board record", "text": line})
+    return segments
+
+
 def fetch_board(state: PipelineState) -> dict[str, Any]:
     audit = state.get("audit_log", [])
     board_id = state["board_id"]
@@ -126,7 +151,17 @@ def fetch_board(state: PipelineState) -> dict[str, Any]:
     # event timestamps. Serializing to ISO strings here keeps every downstream node on primitives.
     payload = get_board_meeting_event(board_id).model_dump(mode="json")
 
-    transcript = build_transcript(payload)
+    # A pasted transcript is the real thing and beats the synthesized stand-in. Board context is
+    # still fetched either way — only summarize reads the transcript.
+    override = (state.get("transcript_override") or "").strip()
+    if override:
+        transcript = parse_transcript_text(override)
+        transcript_note = (f"fetch_board: transcript supplied by user "
+                           f"({len(transcript)} segments parsed)")
+    else:
+        transcript = build_transcript(payload)
+        transcript_note = (f"fetch_board: transcript synthesized from structured board data "
+                           f"({len(transcript)} segments, no recording transcribed)")
 
     return {
         "board": payload.get("board") or {},
@@ -134,7 +169,9 @@ def fetch_board(state: PipelineState) -> dict[str, Any]:
         "patients": payload.get("patients") or [],
         "events": payload.get("events") or [],
         "transcript": transcript,
-        "transcript_id": None,  # no transcript source exists yet; see build_transcript
+        # "user-supplied" when pasted; otherwise there is no transcript source to reference at all
+        # (Clinera exposes only an untranscribed recording) — see build_transcript.
+        "transcript_id": "user-supplied" if override else None,
         "visit_id": f"board-{board_id}",
         # TODO: bind to a real Clinera consent field once one is exposed. Nothing in the
         # board-meeting-events payload carries consent today.
@@ -142,7 +179,6 @@ def fetch_board(state: PipelineState) -> dict[str, Any]:
         "audit_log": audit + [
             f"fetch_board: board {board_id} fetched ({len(payload.get('patients') or [])} patients, "
             f"{len(payload.get('events') or [])} events)",
-            f"fetch_board: transcript synthesized from structured board data "
-            f"({len(transcript)} segments, no recording transcribed)",
+            transcript_note,
         ],
     }

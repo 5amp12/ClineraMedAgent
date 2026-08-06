@@ -11,6 +11,11 @@ class PipelineState(TypedDict, total=False):
     # concatenate list fields themselves — consistent with how summarize() already works.
 
     board_id: int                   # the only required input; everything else fetch_board seeds
+    # Optional raw transcript text pasted by a user. When present, fetch_board parses it and uses
+    # it INSTEAD of the transcript it synthesizes from the structured board payload. Board context
+    # (patients, diagnostics) still comes from Clinera either way, so only the board-level note
+    # changes — agent_reason and draft_recommendations read `patients`, not the transcript.
+    transcript_override: str
     transcript: list[Any]           # seeded input to summarize
     patients: list[Any]             # board patient diagnostics (seeded by fetch_board)
     board: dict[str, Any]           # board metadata (seeded by fetch_board)
