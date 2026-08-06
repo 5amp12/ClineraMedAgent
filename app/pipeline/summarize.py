@@ -20,15 +20,39 @@ from app.pipeline.llm import client, MODEL
 _SYSTEM = (
     "You are a clinical scribe writing the minutes of an MDT (multi-disciplinary team) board "
     "meeting. The record covers EVERY patient discussed — often several unrelated cases. "
-    "Summarize the MEETING as a whole, never a single patient: keep per-patient detail to one "
-    "clause each, always naming the patient it belongs to. Never write 'the patient' — on a "
-    "multi-case board it is ambiguous and misleading. "
+    "Summarize the MEETING as a whole, never a single patient. "
+    "history, findings and plan are LISTS with ONE ENTRY PER PATIENT discussed. Give every patient "
+    "their own entry in each list, and set patient_name to that patient's name exactly as it "
+    "appears in the record. Never merge two patients into one entry, never write 'the patient', "
+    "and never leave a discussed patient out of a list. "
     "Do NOT count anything. Never state how many cases were reviewed, and never give a breakdown "
     "of how many cases of each diagnosis. Those totals are computed separately and added to the "
     "record; asked to count, you get it wrong (8 patients reported as '10 cases', a 2-prostate "
     "board reported as '5 prostate'). Name the diagnoses present without quantifying them. "
     "Use only what is stated in the record; do not invent findings, diagnoses, or plans."
 )
+
+
+def _per_patient(what: str) -> dict[str, Any]:
+    # One entry per patient. Splitting these out of a single prose string is what lets the report
+    # render (and attribute) each patient separately instead of one run-on paragraph.
+    return {
+        "type": "array",
+        "description": f"One entry per patient discussed. {what}",
+        "items": {
+            "type": "object",
+            "properties": {
+                "patient_name": {
+                    "type": "string",
+                    "description": "The patient's name exactly as written in the record.",
+                },
+                "text": {"type": "string", "description": what},
+            },
+            "required": ["patient_name", "text"],
+            "additionalProperties": False,
+        },
+    }
+
 
 # The note shape the model must return. Enforced via OpenAI structured output (strict), so the
 # response is always valid JSON with exactly these fields.
@@ -40,21 +64,11 @@ NOTE_SCHEMA: dict[str, Any] = {
             "description": "One line on why this board met and what it covered. Name the "
                            "diagnoses present; state NO counts or totals.",
         },
-        "history": {
-            "type": "string",
-            "description": "Each patient named, with their diagnosis and stage in one clause. "
-                           "Not one patient's HPI, and no tallies.",
-        },
-        "findings": {
-            "type": "string",
-            "description": "Key results per patient (staging, biomarkers, receptor status), each "
-                           "prefixed with the patient's name.",
-        },
-        "plan": {
-            "type": "string",
-            "description": "The direction agreed per patient, each prefixed with the patient's "
-                           "name.",
-        },
+        "history": _per_patient("This patient's diagnosis, stage and relevant background."),
+        "findings": _per_patient(
+            "This patient's key results — staging, biomarkers, receptor status."
+        ),
+        "plan": _per_patient("The direction agreed for this patient."),
         "source_segments": {
             "type": "array",
             "items": {"type": "integer"},
@@ -64,6 +78,8 @@ NOTE_SCHEMA: dict[str, Any] = {
     "required": ["reason_for_visit", "history", "findings", "plan", "source_segments"],
     "additionalProperties": False,
 }
+
+_SECTIONS = ("history", "findings", "plan")
 
 
 def _transcript_to_text(transcript: list[Any]) -> str:
@@ -81,6 +97,45 @@ def _transcript_to_text(transcript: list[Any]) -> str:
     return "\n".join(lines)
 
 
+def _normalize(name: str) -> str:
+    return " ".join((name or "").split()).casefold()
+
+
+def _stamp_patient_ids(note: dict[str, Any], patients: list[Any]) -> int:
+    """Resolve each entry's model-written patient_name to a real Clinera patient id.
+
+    This is weaker than draft_recommendations' attribution, which stamps patient_id from its loop
+    variable so the model is never asked to attribute anything. summarize is a single board-level
+    call and cannot do that without becoming per-patient minutes, so the name is matched here
+    instead. An entry that fails to match keeps patient_id None and is still rendered under the
+    name the model gave — dropping a patient's history would be far worse than showing it
+    unlinked.
+    """
+    by_name = {_normalize(p.get("name")): p.get("id") for p in patients if p.get("name")}
+    unmatched = 0
+
+    for section in _SECTIONS:
+        for entry in note.get(section) or []:
+            if not isinstance(entry, dict):
+                continue
+            key = _normalize(entry.get("patient_name"))
+            patient_id = by_name.get(key)
+
+            if patient_id is None:
+                # Models routinely return "Mr van Wyk" or "Hennie" for "Hennie van Wyk". Fall back
+                # to an unambiguous containment match; skip it when several patients could match,
+                # since a wrong id is worse than none.
+                candidates = [pid for name, pid in by_name.items()
+                              if key and (key in name or name in key)]
+                patient_id = candidates[0] if len(candidates) == 1 else None
+
+            entry["patient_id"] = patient_id
+            if patient_id is None:
+                unmatched += 1
+
+    return unmatched
+
+
 def summarize(state: dict[str, Any]) -> dict[str, Any]:
     transcript_text = _transcript_to_text(state["transcript"])
 
@@ -96,7 +151,13 @@ def summarize(state: dict[str, Any]) -> dict[str, Any]:
         },
     )
     note = json.loads(response.choices[0].message.content)
+    unmatched = _stamp_patient_ids(note, state.get("patients") or [])
+
+    line = f"summarize: note produced ({len(note.get('history') or [])} patient entries)"
+    if unmatched:
+        line += f", {unmatched} entry/entries could not be matched to a board patient"
+
     return {
         "note": note,
-        "audit_log": state.get("audit_log", []) + ["summarize: note produced"],
+        "audit_log": state.get("audit_log", []) + [line],
     }
