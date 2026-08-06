@@ -29,6 +29,15 @@ class OrderStatus(str, Enum):
     publish_failed = "publish_failed"  # decision stands; the push to Clinera did not land
 
 
+class RunStatus(str, Enum):
+    # Lifecycle of one pipeline run, so the API can answer "is it done?" without holding the
+    # request open for ~17 sequential LLM calls.
+    running = "running"
+    ready = "ready"
+    halted = "halted"    # governance_check refused the board; halt_reason says why
+    failed = "failed"    # the run raised; error carries the message
+
+
 # Override with CLINERA_DB_PATH; ":memory:" restores the old ephemeral behaviour for tests.
 DB_PATH = os.getenv("CLINERA_DB_PATH") or str(Path(__file__).resolve().parents[2] / "clinera.db")
 
@@ -43,6 +52,12 @@ def _conn() -> sqlite3.Connection:
         conn = sqlite3.connect(DB_PATH)
         conn.execute("CREATE TABLE IF NOT EXISTS visits ("
                      "visit_id TEXT PRIMARY KEY, record TEXT NOT NULL)")
+        # Run status lives in SQLite for the same reason the visit record does: the run happens on
+        # a background thread (or the CLI), and a module-level dict would not survive a uvicorn
+        # reload — leaving the UI polling a run nobody is tracking any more.
+        conn.execute("CREATE TABLE IF NOT EXISTS runs ("
+                     "visit_id TEXT PRIMARY KEY, board_id INTEGER, status TEXT NOT NULL, "
+                     "error TEXT, started_at TEXT, finished_at TEXT)")
         conn.commit()
         _local.conn = conn
     return conn
@@ -120,8 +135,86 @@ def attach_report(visit_id: str, report: dict[str, Any]) -> None:
         _write(visit_id, record)
 
 
+def start_run(visit_id: str, board_id: int) -> dict[str, Any]:
+    # Upsert: re-running a board replaces the previous run's status rather than accumulating rows,
+    # matching the 1-to-1 visit_id -> record relationship in `visits`.
+    conn = _conn()
+    conn.execute(
+        "INSERT INTO runs (visit_id, board_id, status, error, started_at, finished_at) "
+        "VALUES (?, ?, ?, NULL, ?, NULL) "
+        "ON CONFLICT(visit_id) DO UPDATE SET board_id = excluded.board_id, "
+        "status = excluded.status, error = NULL, started_at = excluded.started_at, "
+        "finished_at = NULL",
+        (visit_id, board_id, RunStatus.running.value, _now()),
+    )
+    conn.commit()
+    return get_run(visit_id)
+
+
+def finish_run(visit_id: str, status: RunStatus, error: str | None = None) -> dict[str, Any]:
+    conn = _conn()
+    conn.execute(
+        "UPDATE runs SET status = ?, error = ?, finished_at = ? WHERE visit_id = ?",
+        (status.value, error, _now(), visit_id),
+    )
+    conn.commit()
+    return get_run(visit_id)
+
+
+def _run_row(row: Any) -> dict[str, Any]:
+    visit_id, board_id, status, error, started_at, finished_at = row
+    return {
+        "visit_id": visit_id,
+        "board_id": board_id,
+        "status": status,
+        "error": error,
+        "started_at": started_at,
+        "finished_at": finished_at,
+    }
+
+
+def get_run(visit_id: str) -> Optional[dict[str, Any]]:
+    row = _conn().execute(
+        "SELECT visit_id, board_id, status, error, started_at, finished_at "
+        "FROM runs WHERE visit_id = ?",
+        (visit_id,),
+    ).fetchone()
+    return _run_row(row) if row else None
+
+
+def list_runs() -> list[dict[str, Any]]:
+    """Every run, newest first, each enriched with enough of its record to render a list row.
+
+    The landing page needs a board title and counts next to each entry; reading the stored record
+    here keeps that join in one place rather than making the route stitch two sources together.
+    """
+    rows = _conn().execute(
+        "SELECT visit_id, board_id, status, error, started_at, finished_at "
+        "FROM runs ORDER BY started_at DESC"
+    ).fetchall()
+
+    runs = []
+    for row in rows:
+        run = _run_row(row)
+        record = _read(run["visit_id"]) or {}
+        report = record.get("report") or {}
+        orders = record.get("orders") or []
+        run.update({
+            "board_title": report.get("board_title"),
+            "date": report.get("date"),
+            "patient_count": len(report.get("patients") or []),
+            "order_count": len(orders),
+            "pending_count": sum(
+                1 for o in orders if o.get("status") == OrderStatus.pending_approval.value
+            ),
+        })
+        runs.append(run)
+    return runs
+
+
 def clear() -> None:
     # test helper — drop every stored visit.
     conn = _conn()
     conn.execute("DELETE FROM visits")
+    conn.execute("DELETE FROM runs")
     conn.commit()
