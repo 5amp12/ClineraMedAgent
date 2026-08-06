@@ -1,17 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import {
-  Sparkles,
-  UserPlus,
-  Wand2,
-  FileText,
-  Calendar,
-  Plug,
-  Star,
-  GraduationCap,
-  Lightbulb,
-  ClipboardList,
-  PlusCircle,
-} from 'lucide-react'
+import { Sparkles, FileText } from 'lucide-react'
 import './Sidebar.css'
 
 const primaryNavItems = [

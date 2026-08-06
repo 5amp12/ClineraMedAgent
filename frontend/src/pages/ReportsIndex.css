@@ -1,0 +1,243 @@
+.index-page {
+  height: 100%;
+  overflow-y: auto;
+  padding: 28px 32px 48px;
+  background: var(--color-surface);
+}
+
+.index-header {
+  max-width: 720px;
+  margin-bottom: 22px;
+}
+
+.index-title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.index-subtitle {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.index-form {
+  display: flex;
+  flex-direction: column;
+  max-width: 720px;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-bg);
+}
+
+.index-label {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.index-optional {
+  margin-left: 6px;
+  font-weight: 500;
+  color: var(--color-text-faint);
+}
+
+.index-input,
+.index-textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.index-input:focus,
+.index-textarea:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -1px;
+}
+
+.index-input {
+  margin-bottom: 16px;
+  max-width: 200px;
+}
+
+.index-textarea {
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.index-hint {
+  margin: 8px 0 16px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-text-faint);
+}
+
+.index-run-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  align-self: flex-start;
+  padding: 9px 18px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-primary);
+  color: #05221c;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.index-run-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.index-spin {
+  animation: index-spin 1s linear infinite;
+}
+
+@keyframes index-spin {
+  to { transform: rotate(360deg); }
+}
+
+.index-progress {
+  margin: 14px 0 0;
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+}
+
+.index-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border: 1px solid #e6b7b7;
+  border-radius: 8px;
+  background: #fdf3f3;
+  color: #8a2a2a;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.index-runs {
+  max-width: 720px;
+  margin-top: 30px;
+}
+
+.index-runs-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.index-empty {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-text-faint);
+}
+
+.index-run-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.index-run-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.index-run-row:hover {
+  border-color: var(--color-primary);
+}
+
+.index-run-icon {
+  display: flex;
+  color: var(--color-text-faint);
+}
+
+.index-run-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.index-run-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.index-run-meta {
+  font-size: 12px;
+  color: var(--color-text-faint);
+}
+
+.index-run-counts {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.index-run-counts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.index-run-status {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.index-run-status.status-ready {
+  border-color: var(--color-primary);
+  color: var(--color-primary-dark);
+}
+
+.index-run-status.status-running {
+  border-color: #c9b45a;
+  color: #8a7420;
+}
+
+.index-run-status.status-failed,
+.index-run-status.status-halted {
+  border-color: #e6b7b7;
+  color: #8a2a2a;
+}
